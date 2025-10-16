@@ -1,0 +1,51 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [main]
+
+# 환경 변수 정의 - 모든 Job에서 사용 가능
+env:
+  IMAGE_NAME: ml-server
+  REGISTRY: localhost:5000 # 로컬 레지스트리
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Docker Buildx 설정 - 멀티 플랫폼 빌드 지원
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # 이미지 메타데이터 추출
+      # 태그, 레이블 등을 자동 생성
+      - name: Extract metadata
+        id: meta # 이 Step의 출력을 다른 Step에서 참조 가능
+        uses: docker/metadata-action@v4
+        with:
+          # 이미지 이름
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 태그 생성 규칙
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest
+
+      # Docker 이미지 빌드
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          # 빌드 컨텍스트 (Dockerfile 위치)
+          context: .
+          # 푸시 여부 (false = 빌드만)
+          push: false
+          # 태그 - meta Step의 출력 사용
+          tags: ${{ steps.meta.outputs.tags }}
+          # 레이블 - 이미지 메타데이터
+          labels: ${{ steps.meta.outputs.labels }}
+          # 빌드 캐시 활용
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
