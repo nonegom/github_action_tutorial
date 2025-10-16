@@ -55,50 +55,61 @@ jobs:
           # PYTHONPATH를 현재 디렉토리로 설정하여 app 모듈을 찾을 수 있도록 함
           PYTHONPATH=. pytest tests/ -v
 
-  # 빌드 Job (새로 추가)
-  build:
-    # Ubuntu 최신 Runner
-    runs-on: ubuntu-latest
-    # test Job이 성공해야 실행
-    needs: test
+build:
+  runs-on: ubuntu-latest
+  needs: test
 
-    steps:
-      # 코드 체크아웃
-      - name: Checkout code
-        uses: actions/checkout@v3
+  # 권한 설정 추가 (GHCR 푸시용)
+  permissions:
+    contents: read
+    packages: write
 
-      # Docker Buildx 설정
-      # 멀티 플랫폼 빌드, 빌드 캐시 등 고급 기능 지원
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      # 짧은 SHA 추출 (앞 7자)
-      - name: Extract short SHA
-        id: short-sha
-        run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
-      # Docker 이미지 빌드
-      - name: Build Docker image
-        uses: docker/build-push-action@v4
-        with:
-          # 빌드 컨텍스트 - 현재 디렉토리
-          context: .
-          # Dockerfile 경로 (기본값: ./Dockerfile)
-          file: ./Dockerfile
-          # 이미지 푸시 여부 (false = 로컬 빌드만)
-          push: false
-          # 이미지 태그
-          tags: |
-            ml-server:latest
-            ml-server:${{ steps.short-sha.outputs.sha }}
-          # 빌드 캐시 활용 (GitHub Actions 캐시 사용)
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    # 짧은 SHA 추출
+    - name: Extract short SHA
+      id: short-sha
+      run: echo "sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      # 빌드 성공 메시지
-      - name: Image built successfully
-        run: |
-          echo "✅ Docker image built successfully"
-          echo "Tags:"
-          echo "  - ml-server:latest"
-          echo "  - ml-server:${{ steps.short-sha.outputs.sha }}"
+    # 소문자로 변환 (GHCR 요구사항)
+    - name: Set lowercase repository name
+      id: repo-name
+      run: echo "repo=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+    # GitHub Container Registry 로그인
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}
+
+    # Docker 이미지 빌드 및 푸시
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        # 푸시 활성화
+        push: true
+        # GHCR 이미지 이름
+        tags: |
+          ghcr.io/${{ steps.repo-name.outputs.repo }}:latest
+          ghcr.io/${{ steps.repo-name.outputs.repo }}:${{ steps.short-sha.outputs.sha }}
+        # 빌드 캐시
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # 푸시 성공 메시지
+    - name: Image pushed successfully
+      run: |
+        echo "✅ Docker image pushed successfully to GHCR"
+        echo "Registry: ghcr.io"
+        echo "Repository: ${{ steps.repo-name.outputs.repo }}"
+        echo "Tags:"
+        echo "  - latest"
+        echo "  - ${{ steps.short-sha.outputs.sha }}"
