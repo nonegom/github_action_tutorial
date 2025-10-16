@@ -1,0 +1,49 @@
+
+# Workflow 이름 - GitHub Actions 탭에 표시됨
+name: Basic CI
+
+# 트리거 이벤트 정의
+on:
+  # main 브랜치에 push될 때 실행
+  push:
+    branches: [main]
+  # main 브랜치로의 Pull Request가 생성/업데이트될 때 실행
+  pull_request:
+    branches: [main]
+
+# 실행할 Job들
+jobs:
+  # Job 이름: test
+  test:
+    # GitHub-hosted Ubuntu 최신 버전 Runner 사용
+    runs-on: ubuntu-latest
+
+    # Job 내의 실행 단계들
+    steps:
+      # Step 1: 저장소 코드 체크아웃
+      # actions/checkout - 공식 액션으로 코드를 Runner에 복사
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Python 설치
+      # actions/setup-python - Python 환경 설정
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          # Python 버전 지정
+          python-version: "3.9"
+
+      # Step 3: 의존성 설치
+      # run - Shell 명령어 실행
+      - name: Install dependencies
+        run: |
+          # pip 업그레이드
+          python -m pip install --upgrade pip
+          # requirements.txt의 패키지 설치
+          pip install flask pytest
+
+      # Step 4: 테스트 실행
+      - name: Run tests
+        run: |
+          # pytest로 테스트 실행
+          pytest tests/ -v
